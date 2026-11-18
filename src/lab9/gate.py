@@ -42,12 +42,17 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
 
     # 1. Every reported metric is a real number (NaN/inf compare False against any floor).
     for k, v in (pr.get("metrics") or {}).items():
-        if isinstance(v, float) and not math.isfinite(v):
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+            problems.append(f"metric {k} is not a number: {v!r}")
+        elif isinstance(v, float) and not math.isfinite(v):
             problems.append(f"metric {k} is {v!r}")
 
     # 2. Evaluator crashes, even on a green run: a crashed grader is a missing verdict.
-    if pr.get("evaluator_failures"):
-        problems.append(f"{len(pr['evaluator_failures'])} evaluator failure(s), first: {pr['evaluator_failures'][0]}")
+    fails = pr.get("evaluator_failures")
+    if fails:
+        first = list(fails)[:1] if isinstance(fails, (list, tuple, dict)) else [fails]
+        n = len(fails) if isinstance(fails, (list, tuple, dict)) else 1
+        problems.append(f"{n} evaluator failure(s), first: {first[0] if first else fails!r}")
 
     # 3. Row accounting: items x seeds, no duplicates, same (item, seed) set as the baseline.
     keys = [(r.get("item_id"), r.get("seed")) for r in rows]
@@ -98,13 +103,21 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
 
     # 7. Ratchet: same eval-set version => thresholds may only get stricter.
     if base_spec is not None:
-        same_set = (man.get("eval_set_sha") is not None and man.get("eval_set_sha") == bman.get("eval_set_sha"))
-        problems += ratchet(spec, base_spec, same_eval_set=same_set)
+        problems += ratchet(spec, base_spec)
     return problems
+
+
+def _num(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
 
 
 def _looser(th: dict, bth: dict) -> list[str]:
     out = []
+    for k in ("max", "max_increase", "min"):
+        if k in th and not _num(th[k]):
+            out.append(f"{k} is not a number: {th[k]!r}")
+    if out:
+        return out
     for k in ("max", "max_increase"):
         if k in bth and (k not in th or th[k] > bth[k]):
             out.append(f"{k} {bth[k]} -> {th.get(k)}")
@@ -115,8 +128,11 @@ def _looser(th: dict, bth: dict) -> list[str]:
     return out
 
 
-def ratchet(spec: dict, base_spec: dict, same_eval_set: bool = False) -> list[str]:
+def ratchet(spec: dict, base_spec: dict) -> list[str]:
     problems = []
+    # The eval set is identified by the files it grades, not by its version label.
+    same_eval_set = (spec.get("eval_set"), spec.get("labels"), spec.get("adversarial_pack")) == \
+                    (base_spec.get("eval_set"), base_spec.get("labels"), base_spec.get("adversarial_pack"))
     if spec.get("eval_set_version") != base_spec.get("eval_set_version"):
         if not same_eval_set:
             return []     # genuinely new eval set: thresholds start over (and need a new baseline)
@@ -145,6 +161,9 @@ def ratchet(spec: dict, base_spec: dict, same_eval_set: bool = False) -> list[st
     bb, cb = base_spec.get("bootstrap") or {}, spec.get("bootstrap") or {}
     if cb.get("confidence", 0.95) < bb.get("confidence", 0.95):
         problems.append(f"ratchet: bootstrap confidence {bb.get('confidence')} -> {cb.get('confidence')}")
+    for k in ("rng", "n_resamples", "method"):    # re-rolling the bootstrap until the CI touches 0
+        if cb.get(k) != bb.get(k):
+            problems.append(f"ratchet: bootstrap {k} {bb.get(k)!r} -> {cb.get(k)!r}")
     if sorted(spec.get("seeds") or []) != sorted(base_spec.get("seeds") or []):
         problems.append(f"ratchet: seeds {base_spec.get('seeds')} -> {spec.get('seeds')}")
     return problems
@@ -199,6 +218,8 @@ def check(pr: dict, base: dict, spec: dict, base_spec: dict | None = None) -> tu
         verdict, note = "ok", ""
         if val is None:
             verdict = "missing"
+        elif any(k in th and not _num(th[k]) for k in ("max", "min", "max_increase")) or not _num(val):
+            verdict = "fail"              # a threshold or value that is not a number cannot pass
         elif "max" in th and val > th["max"]:
             verdict = "fail"
         elif "min" in th and val < th["min"]:
@@ -210,7 +231,8 @@ def check(pr: dict, base: dict, spec: dict, base_spec: dict | None = None) -> tu
             a, b = per_item(pr, mid), per_item(base, mid)
             keys = sorted(set(a) & set(b))
             d, lo, hi = stats.paired_bootstrap([a[k] for k in keys], [b[k] for k in keys],
-                                               n_resamples=bs.get("n_resamples", 1000), rng=bs.get("rng", 2027))
+                                               n_resamples=bs.get("n_resamples", 1000), rng=bs.get("rng", 2027),
+                                               confidence=bs.get("confidence", 0.95))
             note = f"Δ {d:+.3f} CI [{lo:+.3f}, {hi:+.3f}]"
             if hi < 0:
                 verdict = "fail"
