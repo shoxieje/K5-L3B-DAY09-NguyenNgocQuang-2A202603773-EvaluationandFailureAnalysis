@@ -3,7 +3,7 @@
 Card này đi kèm mỗi báo cáo và được dùng lại ở Day 10. Mọi số dưới đây lấy từ report sinh bằng `python -m lab9.eval` / `lab9.gate` (không gõ tay).
 
 - **Run ID / eval set SHA:** baseline `E-swarm-20261118-325d` (`src/reports/baseline_v1.json`) · PR `E-fixed-20261118-325d`, `E-seeded_regression-20261118-325d` · eval set `325ddcd80bad`
-- **Phiên bản:** code `2420a3a` (nhánh `starter/d09`) · eval set v1 (sha `325ddcd80bad`) · metric_spec `1.1` · grader commit `2420a3a` (`lab9/graders.py`) · seeds 11/22/33/44/55 · MockLLM · Python 3.12 (CI 3.13)
+- **Phiên bản:** code `0539cef` (nhánh `main`; gate sửa lần cuối ở commit này) · eval set v1 (sha `325ddcd80bad`) · metric_spec `1.1` · grader commit `2420a3a` (`lab9/graders.py`) · seeds 11/22/33/44/55 · MockLLM · Python 3.12 (CI 3.13)
 - **Eval set:** v1, 14 item × 5 seed = 70 trial, nguồn `lab8_public` (ma trận T01–T14); nhãn tách riêng ở `labels_v1.json`; mỗi item có `failure_modes` (FM-01…FM-09) và provenance (`label_by: lab8_matrix`, `checked_by: lab9.trace_case`).
 - **Metric & ngưỡng** (`config/metric_spec.yaml`):
 
