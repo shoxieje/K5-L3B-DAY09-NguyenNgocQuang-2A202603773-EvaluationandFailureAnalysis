@@ -75,16 +75,22 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
     for mid in graded:
         if not any(mid in r for r in rows) and mid not in base_cols:
             continue          # metric not produced by either run (older report format): nothing to compare
-        bad = [r for r in rows if r.get(mid) is None or (isinstance(r.get(mid), float) and not math.isfinite(r[mid]))]
+        bad = [r for r in rows if not _verdict(r.get(mid))]
         if bad:
-            problems.append(f"{len(bad)} row(s) with no value for graded metric {mid} "
-                            f"(first {bad[0].get('item_id')}@{bad[0].get('seed')})")
+            problems.append(f"{len(bad)} row(s) with no valid value for graded metric {mid} "
+                            f"(first {bad[0].get('item_id')}@{bad[0].get('seed')}: {bad[0].get(mid)!r})")
+    bad_cost = [r for r in rows if "cost" in r and not (_num(r["cost"]) and math.isfinite(r["cost"]))]
+    if bad_cost:
+        problems.append(f"{len(bad_cost)} row(s) with a non-numeric cost")
 
     # 5. Reported metrics must be what the rows say (a hand-edited aggregate is a forged report).
     if rows and not problems:
         ids = [m for m in graded if m in rows[0]]
         has_cost = all("cost" in r for r in rows)
-        again = aggregate([{"cost": 0.0, **r} for r in rows], ids, k_values=spec.get("pass_k", []))
+        try:
+            again = aggregate([{"cost": 0.0, **r} for r in rows], ids, k_values=spec.get("pass_k", []))
+        except (TypeError, ValueError, KeyError) as exc:   # rows the harness could never have written
+            return problems + [f"rows cannot be re-aggregated: {type(exc).__name__}: {exc}"]
         if not has_cost:
             again.pop("cost_per_success", None)
         for k, v in (pr.get("metrics") or {}).items():
@@ -109,6 +115,11 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
 
 def _num(x) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def _verdict(v) -> bool:
+    """A grader verdict as lab9.eval writes it: a bool (or a finite 0/1-style number)."""
+    return isinstance(v, bool) or (_num(v) and math.isfinite(v))
 
 
 def _looser(th: dict, bth: dict) -> list[str]:
