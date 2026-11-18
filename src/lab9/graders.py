@@ -73,12 +73,25 @@ class DbFactKept(Evaluator[Any, Trial]):
         return EvaluationReason(value=not bad, reason=f"{len(bad)} override event(s)" if bad else None)
 
 
-# "35.000đ", "35,000 VND", "35000đ", "35.000 ₫" -> 35000. Amounts in replies are always followed by a currency mark.
-AMOUNT_RE = re.compile(r"(\d{1,3}(?:[.,]\d{3})+|\d+)\s*(?:đ|₫|vnd|vnđ|dong|đồng)(?![^\W\d_])", re.IGNORECASE)
+# Money amounts in a Vietnamese reply: "35.000đ", "35,000 VND", "35000 đồng", "35k", "35 nghìn", "1,5 triệu".
+# A number counts only when a currency/unit word follows it, so "O-808", "5 ngày", "3 đơn" are ignored.
+AMOUNT_RE = re.compile(
+    r"(?<![\w.,-])(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?)\s*"
+    r"(k|nghìn|nghin|ngàn|ngan|triệu|trieu|tr|vnđ|vnd|đồng|dong|đ|₫)(?![^\W\d_])",
+    re.IGNORECASE)
+_UNIT = {"k": 1_000, "nghìn": 1_000, "nghin": 1_000, "ngàn": 1_000, "ngan": 1_000,
+         "triệu": 1_000_000, "trieu": 1_000_000, "tr": 1_000_000}
 
 
 def reply_amounts(text: str) -> list[int]:
-    return [int(re.sub(r"[.,]", "", m)) for m in AMOUNT_RE.findall(text or "")]
+    out = []
+    for num, unit in AMOUNT_RE.findall(text or ""):
+        if re.fullmatch(r"\d{1,3}(?:[.,]\d{3})+", num):
+            value = float(re.sub(r"[.,]", "", num))          # thousands separators
+        else:
+            value = float(num.replace(",", "."))             # plain or decimal ("1,5 triệu")
+        out.append(int(round(value * _UNIT.get(unit.lower(), 1))))
+    return out
 
 
 @dataclass
@@ -100,6 +113,19 @@ class ReplyMatchesLedger(Evaluator[Any, Trial]):
                                 reason=f"reply says {wrong} but ledger holds {ledger}" if wrong else None)
 
 
+@dataclass
+class ProposalCorrect(Evaluator[Any, Trial]):
+    """FM-04 / FM-05, outcome level. The amount the agent PROPOSED to the host must be the label's
+    proposal_amount (the official quote). Catches rounding / summing / self-deduction even when the
+    host's caps or a denial leave the ledger looking right."""
+
+    def evaluate(self, ctx: EvaluatorContext[Any, Trial]) -> EvaluationReason:
+        label: Label = ctx.expected_output or {}
+        got = int((ctx.output.get("result") or {}).get("proposal_amount") or 0)
+        want = int(label.get("proposal_amount") or 0)
+        return EvaluationReason(value=got == want, reason=None if got == want else f"proposal {got} != label {want}")
+
+
 # Order matters only for display. Names here are the metric ids in config/metric_spec.yaml.
 GRADERS: dict[str, type[Evaluator]] = {
     "pass_rate": TrialPass,
@@ -108,4 +134,5 @@ GRADERS: dict[str, type[Evaluator]] = {
     "refund_amount_correct": RefundAmountCorrect,
     "db_fact_kept": DbFactKept,
     "reply_matches_ledger": ReplyMatchesLedger,
+    "proposal_correct": ProposalCorrect,
 }

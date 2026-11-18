@@ -29,9 +29,11 @@ REQUIRED = ("item_id", "claim_id", "failure_modes", "provenance", "split", "eval
 
 FM_CODE = re.compile(r"FM-\d{2}")
 
-# M1: failure modes each claim exercises, primary first. Every entry was observed on a trace:
-# a single-bug variant of the swarm (lab9.variant_agent switches) fails Lab 8's trial_pass on that
-# claim for all 5 seeds, or (FM-08) the reply amount differs from the ledger. See docs/failure_taxonomy.md.
+# M1: failure modes each claim exercises, primary first. Observed on a trace unless noted: a single-bug
+# variant of the swarm (lab9.variant_agent switches) fails Lab 8's trial_pass on that claim for all 5
+# seeds, or (FM-08) the reply amount differs from the ledger. FM-01 is tagged only where a secret/PII is
+# the main risk, although leaky_trace fails all 14 claims. Two tags are targeted risks with no failing
+# v1 variant yet: C-005 FM-09 and C-009 FM-03. See docs/failure_taxonomy.md.
 FAILURE_MODES: dict[str, list[str]] = {
     "C-001": ["FM-07", "FM-04", "FM-01"],   # sibling_refund writes C-001 from C-010/11/12; round_down 35k->30k
     "C-002": ["FM-03", "FM-01"],            # ticket says 5 days, DB says 2 -> model_override (swarm @55, seeded @all)

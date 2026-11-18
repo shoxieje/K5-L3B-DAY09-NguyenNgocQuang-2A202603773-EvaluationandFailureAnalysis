@@ -53,7 +53,7 @@ def rogan_gladen(observed_rate: float, sensitivity: float, specificity: float) -
     """Correct an observed failure rate for judge error; clip to [0, 1]."""
     denom = sensitivity + specificity - 1
     if denom <= 0:
-        raise ValueError("Rogan-Gladen undefined: judge no better than chance (sens + spec <= 1)")
+        return float("nan")   # judge no better than chance: the true rate cannot be recovered
     return min(1.0, max(0.0, (observed_rate + specificity - 1) / denom))
 
 
@@ -86,6 +86,7 @@ def pass_at_k(n: int, c: int, k: int) -> float:
     Unbiased estimator (Chen et al. 2021): 1 - C(n-c, k) / C(n, k). Raise ValueError if k > n."""
     _check_nck(n, c, k)
     from math import comb
+    n, c, k = int(n), int(c), int(k)
     return 1.0 - comb(n - c, k) / comb(n, k)
 
 
@@ -95,12 +96,14 @@ def pass_hat_k(n: int, c: int, k: int) -> float:
     pass^k <= pass@1 <= pass@k; a reliable agent keeps pass^k close to pass@1."""
     _check_nck(n, c, k)
     from math import comb
+    n, c, k = int(n), int(c), int(k)
     return comb(c, k) / comb(n, k)
 
 
 def _check_nck(n: int, c: int, k: int) -> None:
+    from numbers import Integral
     for name, v in (("n", n), ("c", c), ("k", k)):
-        if isinstance(v, bool) or not isinstance(v, int):
+        if isinstance(v, bool) or not isinstance(v, Integral):
             raise ValueError(f"{name} must be an int, got {v!r}")
     if n < 1 or k < 1:
         raise ValueError(f"need n >= 1 and k >= 1, got n={n}, k={k}")
