@@ -1,6 +1,6 @@
 # Failure taxonomy v1
 
-Nguồn bằng chứng: trace sinh bằng `python -m lab9.trace_case --shape <shape> --claim <C> --seed <s>` trên MockLLM, 14 claim × seed {11, 22, 33, 44, 55}. Với mỗi FM, mình bật **đúng một** công tắc lỗi của `lab9/variant_agent.py` trên nền `fixed` (`no_override`) và ghi lại claim nào làm `lab8.metrics.trial_pass` fail; bảng "Claim bị ảnh hưởng" bên dưới là kết quả đó. Số event (`#n`) là thứ tự event in ra bởi `lab9.trace_case`.
+Nguồn bằng chứng: trace trên MockLLM, 14 claim × seed {11, 22, 33, 44, 55}. Shape có sẵn (`swarm`, `fixed`, `seeded_regression`) xem bằng `python -m lab9.trace_case --shape <shape> --claim <C> --seed <s>`. Với mỗi FM, mình dựng shape một-lỗi bằng `lab9.variant_agent.make_shape` (bật **đúng một** công tắc lỗi trên nền `fixed` / `no_override`) rồi chạy qua cùng `lab9.eval.make_task` và ghi lại claim nào làm `lab8.metrics.trial_pass` fail; bảng "Claim bị ảnh hưởng" bên dưới là kết quả đó. Số event (`#n`) là thứ tự event in ra bởi `lab9.trace_case`.
 
 | ID | Tên | Định nghĩa (1 câu) | Layer | Bằng chứng (claim@seed / trace) | Grader | Metric |
 |---|---|---|---|---|---|---|
